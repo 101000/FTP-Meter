@@ -1,0 +1,9 @@
+/logs
+/crm.lck
+/crm.log
+/crm.properties
+/crm.script
+/crm.tmp
+/bin
+/.project
+/.classpath
