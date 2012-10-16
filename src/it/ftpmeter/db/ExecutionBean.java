@@ -1,4 +1,4 @@
-package it.mq.ftpmeter.db;
+package it.ftpmeter.db;
 
 import java.math.BigDecimal;
 import java.sql.Date;

@@ -1,7 +1,7 @@
-package it.mq.ftpmeter.ftp;
+package it.ftpmeter.ftp;
 
-import it.mq.ftpmeter.db.ExecutionBean;
-import it.mq.ftpmeter.db.ExecutionDAO;
+import it.ftpmeter.db.ExecutionBean;
+import it.ftpmeter.db.ExecutionDAO;
 
 import java.io.IOException;
 import java.io.InputStream;

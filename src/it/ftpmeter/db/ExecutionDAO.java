@@ -1,4 +1,4 @@
-package it.mq.ftpmeter.db;
+package it.ftpmeter.db;
 
 import java.sql.Connection;
 import java.sql.DriverManager;

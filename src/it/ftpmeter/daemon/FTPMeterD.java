@@ -1,7 +1,7 @@
-package it.mq.ftpmeter.daemon;
+package it.ftpmeter.daemon;
 
-import it.mq.ftpmeter.db.HSqlStarter;
-import it.mq.ftpmeter.ftp.FTPSenderClient;
+import it.ftpmeter.db.HSqlStarter;
+import it.ftpmeter.ftp.FTPSenderClient;
 
 import java.io.IOException;
 import java.sql.Connection;
