@@ -26,7 +26,7 @@ public class HSqlStarter {
 	public static void startDB(boolean dropdb) throws IOException, AclFormatException, ClassNotFoundException, SQLException {
 		log.info("Starting Database ...");
 		HsqlProperties p = new HsqlProperties();
-		p.setProperty("server.database.0", "file:crm");
+		p.setProperty("server.database.0", "file:/db/crm");
 		p.setProperty("server.dbname.0", "ftpmeter");
 		p.setProperty("server.port", "9001");		
 		server.setProperties(p);

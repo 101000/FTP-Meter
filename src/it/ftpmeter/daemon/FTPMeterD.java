@@ -3,19 +3,10 @@ package it.ftpmeter.daemon;
 import it.ftpmeter.db.HSqlStarter;
 import it.ftpmeter.ftp.FTPSenderClient;
 
-import java.io.IOException;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-
 import org.apache.commons.daemon.Daemon;
 import org.apache.commons.daemon.DaemonContext;
 import org.apache.commons.daemon.DaemonInitException;
 import org.apache.log4j.Logger;
-import org.hsqldb.persist.HsqlProperties;
-import org.hsqldb.server.Server;
-import org.hsqldb.server.ServerAcl.AclFormatException;
 
 /**
  * 
