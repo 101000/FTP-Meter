@@ -17,21 +17,22 @@ public class ExecutionDAO {
 	static{
 		try {
 			connection = DriverManager.getConnection("jdbc:hsqldb:hsql://localhost/ftpmeter", "sa", "");
+			log.info("Connecting to database .. OK");	
 		} catch (SQLException e) {
-			 log.error("Errore durante la connessione al Database");			 
+			 log.error("Error connecting to database");			 
 		}
 	}
 		
 	public void insert(final ExecutionBean execBean) throws SQLException{
 		String sql = "insert into fme_execution (" +
 				"nm_sender, " +
-				"pg_esecuzione, " +
-				"dt_inizio, " +
-				"dt_fine, " +
-				"ni_durata, " +
+				"pg_execution, " +
+				"dt_start, " +
+				"dt_end, " +
+				"nd_duration, " +
 				"ni_size, " +
-				"ni_speed, " +
-				"ni_speedbit) " +
+				"nd_speed, " +
+				"nd_speedbit) " +
 				"values (?,?,?,?,?,?,?,?)";
 				
 		PreparedStatement ps = connection.prepareStatement(sql);
@@ -50,7 +51,7 @@ public class ExecutionDAO {
 	}
 	
 	public long getLastPgEsecuzione() throws Exception{
-		String sql = "select MAX(pg_esecuzione) from fme_execution";			
+		String sql = "select MAX(pg_execution) from fme_execution";			
 		Statement statement = connection.createStatement();
 		ResultSet rs = statement.executeQuery(sql);
 		if(rs.next())

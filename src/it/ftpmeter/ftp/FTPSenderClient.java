@@ -3,31 +3,43 @@ package it.ftpmeter.ftp;
 import it.ftpmeter.db.ExecutionBean;
 import it.ftpmeter.db.ExecutionDAO;
 
+import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.math.BigDecimal;
+import java.net.Inet6Address;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.net.SocketException;
 import java.net.UnknownHostException;
-import java.sql.Date;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Timestamp;
 import java.util.Properties;
 import java.util.Random;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSessionContext;
+
 import org.apache.commons.net.ftp.FTP;
 import org.apache.commons.net.ftp.FTPClient;
+import org.apache.commons.net.ftp.FTPCommand;
 import org.apache.commons.net.ftp.FTPReply;
 import org.apache.commons.net.ftp.FTPSClient;
+import org.apache.commons.net.io.SocketOutputStream;
+import org.apache.commons.net.util.SSLContextUtils;
+import org.apache.commons.net.util.TrustManagerUtils;
 import org.apache.log4j.Logger;
 
-public class FTPSenderClient extends Thread{
+public class FTPSenderClient extends Thread {
 
 	public static final int MEGABYTE = 1024 * 1024;
 	public static final Properties properties = new Properties();
 	public static final Logger log = Logger.getLogger(FTPSenderClient.class);
+	final static int BUFFER_SIZE = 100*1024 * 1024;
 	public static byte[] bytes;
-	public static String filename;
+	public String filename;
 	public static String username;
 	public static String password;
 	public static ExecutionDAO executionDAO = new ExecutionDAO();
@@ -47,10 +59,9 @@ public class FTPSenderClient extends Thread{
 			int filesize = Integer.parseInt(getConfigString("ftp.filesize"));
 			bytes = new byte[filesize * MEGABYTE];
 			new Random().nextBytes(bytes);
-			filename = getConfigString("ftp.filename");  
-			username = getConfigString("ftp.user");      
-			password = getConfigString("ftp.pass");      
-			
+			username = getConfigString("ftp.user");
+			password = getConfigString("ftp.pass");
+
 		} catch (NumberFormatException e) {
 			e.printStackTrace();
 		} catch (IOException e) {
@@ -58,20 +69,19 @@ public class FTPSenderClient extends Thread{
 		}
 
 	}
-	
 
-	public void start(boolean endless) throws NumberFormatException, IOException {
-		FTPClient ftp = new FTPClient();
+	public void start(boolean endless, int loop) throws NumberFormatException, IOException, NoSuchAlgorithmException {
 		InetAddress addr = null;
-		int port = 0;		
+		int port = 0;
 		try {
 			addr = InetAddress.getByName(getConfigString("ftp.server"));
 			port = Integer.parseInt(getConfigString("ftp.port"));
 		} catch (UnknownHostException ex) {
 			log.error("Unknown host");
 		}
-		
-		int loop =  Integer.parseInt(getConfigString("ftp.loop"));
+	
+		FTPSClient ftp = new FTPSClient();
+	
 		try {
 
 			int reply;
@@ -86,7 +96,7 @@ public class FTPSenderClient extends Thread{
 				log.error("FTP server refused connection.");
 				System.exit(1);
 			}
-			log.info("Login user "+username);
+			log.info("Login user " + username);
 			if (!ftp.login(username, password)) {
 				log.info(ftp.getReplyString());
 				ftp.logout();
@@ -101,16 +111,29 @@ public class FTPSenderClient extends Thread{
 				ftp.enterLocalPassiveMode();
 				log.info("Enter local passive mode.\n");
 				
-				if(endless){
+				// Set protection buffer size
+				ftp.execPBSZ(0);
+				// Set data channel protection to private
+				ftp.execPROT("P");
+				if (endless) {
 					int i = 0;
-					while(!terminate){
-						sendFileAndStore(ftp,filename+"_"+Thread.currentThread().getId(),i);
-						i++;
+					while (!terminate) {
+						try {
+							sendFileAndStore(ftp, filename, i);
+							i++;
+						} catch (Exception e) {
+							log.error(e);
+						}
 					}
-				}
-				else{
-					for(int i = 0; i<loop; i++){
-						sendFileAndStore(ftp,filename+"_"+Thread.currentThread().getId(),i);
+				} else {
+					for (int i = 0; i < loop; i++) {
+						if (!terminate) {
+							try {
+								sendFileAndStore(ftp, filename, i);
+							} catch (Exception e) {
+								log.error(e);
+							}
+						}
 					}
 				}
 				ftp.logout();
@@ -127,7 +150,7 @@ public class FTPSenderClient extends Thread{
 					// do nothing
 				}
 			}
-			log.error("Couldn't connect to server: " + addr,ex);			
+			log.error("Couldn't connect to server: " + addr, ex);
 		} finally {
 			if (ftp.isConnected()) {
 				try {
@@ -145,63 +168,70 @@ public class FTPSenderClient extends Thread{
 		return properties.getProperty(key);
 	}
 
-	protected static void sendFileAndStore(FTPClient ftp, String filename, int loopIndex) throws Exception{
-		ExecutionBean executionBean = new ExecutionBean();		
+	protected static void sendFileAndStore(FTPClient ftp, String filename, int loopIndex) throws Exception {
+		ExecutionBean executionBean = new ExecutionBean();
+		ftp.setBufferSize(BUFFER_SIZE);
 		OutputStream fout = null;
-		fout = ftp.storeFileStream(filename);
-		log.info(ftp.getReplyString());
-		log.info("Start sending file " + filename+" ...");	
+		fout = new BufferedOutputStream(ftp.storeFileStream(filename), BUFFER_SIZE);
+		log.debug(ftp.getReplyString());
+		log.debug("Start sending file " + filename + " ...");		
 		long startTime = System.currentTimeMillis();
-		try{					
-			fout.write(bytes);					
-		}finally{
+		try {
+			fout.write(bytes);
+		} finally {
 			fout.close();
 		}
-		long endTime = System.currentTimeMillis();	
-		ftp.completePendingCommand();						
-		log.info(ftp.getReplyString());
-		log.info("File stored on FTP server");				
-		float trRate =  ((float) bytes.length / (endTime - startTime));
-		log.info("Invio #"+loopIndex+": "+bytes.length + " bytes (" + bytes.length / MEGABYTE + " MB) copiati in " + (float)(endTime - startTime)/1000 + " s. " 
-				+ trRate/1000 + " MB/s - ~"+((long)(trRate*8)/1000)+" Mbit/s");
+		long endTime = System.currentTimeMillis();
+		ftp.completePendingCommand();
+		log.debug(ftp.getReplyString());
+		log.debug("File stored on FTP server");
+		float trRate = ((float) bytes.length / (endTime - startTime));
+		log.info("Invio #" + loopIndex + ": " + bytes.length + " bytes (" + bytes.length / MEGABYTE + " MB) copiati in "
+				+ (float) (endTime - startTime) / 1000 + " s. " + trRate / 1000 + " MB/s - ~" + ((long) (trRate * 8) / 1000) + " Mbit/s");
 		executionBean.setDtInizio(new Timestamp(startTime));
 		executionBean.setDtFine(new Timestamp(endTime));
-		executionBean.setNiDurata((double)(endTime - startTime)/1000);
+		executionBean.setNiDurata((double) (endTime - startTime) / 1000);
 		executionBean.setNiSize(bytes.length);
-		executionBean.setNiSpeed(new Double(trRate/1000));
-		executionBean.setNiSpeedbit(new Double((trRate*8)/1000));
-		executionBean.setNmSender(username+"_"+Thread.currentThread().getName());
-		executionBean.setPgEsecuzione(executionDAO.getLastPgEsecuzione()+1);
+		executionBean.setNiSpeed(new Double(trRate / 1000));
+		executionBean.setNiSpeedbit(new Double((trRate * 8) / 1000));
+		executionBean.setNmSender(username + "_" + Thread.currentThread().getName());
+		executionBean.setPgEsecuzione(executionDAO.getLastPgEsecuzione() + 1);
 		executionDAO.insert(executionBean);
 	}
 
-@Override
-public void run() {
-	try {
-		this.start(endlessloop);
-	} catch (NumberFormatException e) {
-		// TODO Auto-generated catch block
-		e.printStackTrace();
-	} catch (IOException e) {
-		// TODO Auto-generated catch block
-		e.printStackTrace();
+	@Override
+	public void run() {
+		try {
+			this.start(endlessloop, loop);
+		} catch (NumberFormatException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+	}
+
+	private boolean endlessloop = false;
+	private boolean terminate = false;
+	private int loop = 0;
+
+	public FTPSenderClient(boolean endless, int threadnum, int loop) throws IOException {
+		this.endlessloop = endless;
+		if (loop > 0) {
+			this.loop = loop;
+		} else {
+			this.loop = Integer.parseInt(getConfigString("ftp.loop"));
+		}
+
+		filename = getConfigString("ftp.filename") + "_" + threadnum;
+	}
+
+	public void setTerminate(boolean terminate) {
+		this.terminate = terminate;
 	}
 	
-}
-
-private boolean endlessloop = false;
-private boolean terminate = false;
-
-
-public FTPSenderClient(boolean endless){
-	this.endlessloop = endless;
-}
-
-public void setTerminate(boolean terminate) {
-	this.terminate = terminate;
-}
-
-
-
+	
 
 }

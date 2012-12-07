@@ -24,6 +24,7 @@ public class FTPMeterD implements Daemon {
 	public static final Logger log = Logger.getLogger(FTPMeterD.class);
 	private boolean dropdb = false;
 	private boolean endless = false;
+	private int loop = 0;
 	private FTPSenderClient clientThread[] = null;
 	int numthread;
 
@@ -39,44 +40,58 @@ public class FTPMeterD implements Daemon {
 				}
 			}
 		}
+		HSqlStarter.stop();
+		log.info("FTP Meter .. bye");
 	}
 
 	@Override
 	public void init(DaemonContext arg0) throws DaemonInitException, Exception {
+		HSqlStarter.startDB(dropdb);
 		int base = 0;
-
-		String args[] = arg0.getArguments();
-		for (base = 0; base < args.length; base++) {
-			if (args[base].equals("-dropdb")) {
-				dropdb = true;
-			}
-			if (args[base].equals("-endless")) {
-				endless = true;
+		if(arg0!=null){
+			String args[] = arg0.getArguments();
+			for (base = 0; base < args.length; base++) {
+				if (args[base].equals("-dropdb")) {
+					dropdb = true;
+				}
+				if (args[base].equals("-endless")) {
+					endless = true;					
+				}
+				if (args[base].equals("-t")) {
+					numthread = Integer.parseInt(args[base+1]);
+				}
+				if (args[base].equals("-loop")) {
+					loop = Integer.parseInt(args[base+1]);					
+				}
 			}
 		}
-		numthread = Integer.parseInt(FTPSenderClient
-				.getConfigString("ftp.threadnum"));
+		if(numthread==0){
+			numthread = Integer.parseInt(FTPSenderClient.getConfigString("ftp.threadnum"));
+		}
+		clientThread = new FTPSenderClient[numthread];
 		for (int i = 0; i < numthread; i++) {
-			clientThread[i] = new FTPSenderClient(endless);
+			clientThread[i] = new FTPSenderClient(endless,i, loop);
 		}
 	}
 
 	@Override
 	public void start() throws Exception {
-		HSqlStarter.startDB(dropdb);
-
+		log.info("Starting threads ...");
 		for (int i = 0; i < numthread; i++) {
-			clientThread[numthread].start();
+			clientThread[i].start();
+			log.info("Thread "+i+" started");
 		}
-
+		
 	}
 
 	@Override
 	public void stop() throws Exception {
-		HSqlStarter.stop();
+		log.info("Stopping threads ...");
 		for (int i = 0; i < numthread; i++) {
-			clientThread[numthread].setTerminate(true);
+			clientThread[i].setTerminate(true);
+			log.info("Thread "+i+" notified for halting");
 		}
-
+		
+		
 	}
 }
